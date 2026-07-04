@@ -70,6 +70,8 @@ def signup(payload: schemas.SignupRequest, db: Session = Depends(get_db)):
         login_id=user.login_id,
         full_name=user.full_name,
         must_change_password=user.must_change_password,
+        company_name=company.name,
+        company_logo_url=company.logo_url,
     )
 
 
@@ -99,6 +101,8 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
         login_id=user.login_id,
         full_name=user.full_name,
         must_change_password=user.must_change_password,
+        company_name=user.company.name,
+        company_logo_url=user.company.logo_url,
     )
 
 

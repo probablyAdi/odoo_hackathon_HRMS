@@ -16,8 +16,10 @@ function renderShell(activePage) {
   mount.innerHTML = `
     <div class="topbar">
       <div class="brand-row">
-        <div class="brand-mark">HR</div>
-        <span class="brand-name">HRMS</span>
+        ${session.company_logo_url 
+          ? `<img src="${session.company_logo_url}" alt="Logo" style="height: 24px; width: auto; object-fit: contain; border-radius: 4px; background: var(--bg-surface);">` 
+          : `<div class="brand-mark">HR</div>`}
+        <span class="brand-name">${session.company_name || 'HRMS'}</span>
       </div>
       <nav>
         ${navItems.map(item => `

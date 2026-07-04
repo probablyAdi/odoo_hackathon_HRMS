@@ -53,6 +53,8 @@ class TokenResponse(BaseModel):
     login_id: str
     full_name: str
     must_change_password: bool
+    company_name: str
+    company_logo_url: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):

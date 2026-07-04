@@ -26,13 +26,13 @@
 
       <form id="signupForm" novalidate>
         <div class="field-row">
-          <div class="field" style="flex: 2;">
+          <div class="field" style="flex: 1;">
             <label for="companyName">Company Name</label>
             <input type="text" id="companyName" placeholder="Acme Corporation" required>
           </div>
-          <div class="field" style="flex: 1; min-width: 120px;">
-            <label for="companyLogo">Upload Logo</label>
-            <input type="file" id="companyLogo" accept="image/*" style="padding: 7px 10px;">
+          <div class="field" style="flex: 1;">
+            <label for="companyLogo">Logo URL (Optional)</label>
+            <input type="url" id="companyLogo" placeholder="https://example.com/logo.png">
           </div>
         </div>
 
@@ -134,8 +134,12 @@
 
       if (!emailOk || !pwOk) return;
 
+      const logoInput = document.getElementById("companyLogo").value.trim();
+      const logoUrl = logoInput.length > 0 ? logoInput : null;
+
       const payload = {
         company_name: document.getElementById("companyName").value.trim(),
+        logo_url: logoUrl,
         first_name: document.getElementById("firstName").value.trim(),
         last_name: document.getElementById("lastName").value.trim(),
         email,
@@ -154,6 +158,8 @@
           login_id: data.login_id,
           full_name: data.full_name,
           must_change_password: data.must_change_password,
+          company_name: data.company_name,
+          company_logo_url: data.company_logo_url,
         });
         toast(`Account created! Your login ID is ${data.login_id}`, "success");
         setTimeout(() => window.location.href = "dashboard.html", 1200);

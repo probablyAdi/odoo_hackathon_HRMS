@@ -90,6 +90,8 @@
           login_id: data.login_id,
           full_name: data.full_name,
           must_change_password: data.must_change_password,
+          company_name: data.company_name,
+          company_logo_url: data.company_logo_url,
         });
         window.location.href = data.must_change_password ? "change-password.html" : "dashboard.html";
       } catch (err) {
