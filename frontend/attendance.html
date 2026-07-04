@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance · HRMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="topbar-mount"></div>
+
+  <div class="page-wrap">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Attendance</h1>
+        <p class="subtitle mt-0" id="pageSubtitle">Loading…</p>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="btn-icon" id="prevBtn">←</button>
+        <span id="dateLabel" style="font-weight:600; font-size:13.5px; min-width:150px; text-align:center;"></span>
+        <button class="btn-icon" id="nextBtn">→</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="statRow"></div>
+
+    <div class="panel">
+      <table class="data-table">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6"><div class="skeleton" style="height:40px;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script>
+    const session = renderShell("attendance");
+    const isAdmin = session.role === "admin";
+    let cursorDate = new Date();
+
+    document.getElementById("pageSubtitle").textContent = isAdmin
+      ? "Everyone's check-in/check-out for the selected day."
+      : "Your day-wise attendance for the selected month.";
+
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      if (isAdmin) cursorDate.setDate(cursorDate.getDate() - 1);
+      else cursorDate.setMonth(cursorDate.getMonth() - 1);
+      load();
+    });
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      if (isAdmin) cursorDate.setDate(cursorDate.getDate() + 1);
+      else cursorDate.setMonth(cursorDate.getMonth() + 1);
+      load();
+    });
+
+    async function load() {
+      if (isAdmin) await loadAdminView(); else await loadSelfView();
+    }
+
+    async function loadAdminView() {
+      document.getElementById("dateLabel").textContent = cursorDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+      document.getElementById("tableHead").innerHTML = `<tr><th>Employee</th><th>Check In</th><th>Check Out</th><th>Status</th><th>Work Hours</th><th>Extra Hours</th></tr>`;
+      const dateStr = cursorDate.toISOString().slice(0, 10);
+      try {
+        const rows = await api.get(`/api/attendance/all?work_date=${dateStr}`);
+        renderStats(rows);
+        renderBody(rows, true);
+      } catch (err) {
+        document.getElementById("tableBody").innerHTML = `<tr><td colspan="6"><div class="empty-state">${err.message}</div></td></tr>`;
+      }
+    }
+
+    async function loadSelfView() {
+      document.getElementById("dateLabel").textContent = cursorDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+      document.getElementById("tableHead").innerHTML = `<tr><th>Date</th><th>Check In</th><th>Check Out</th><th>Status</th><th>Work Hours</th><th>Extra Hours</th></tr>`;
+      try {
+        const rows = await api.get(`/api/attendance/me?month=${cursorDate.getMonth() + 1}&year=${cursorDate.getFullYear()}`);
+        renderStats(rows);
+        renderBody(rows, false);
+      } catch (err) {
+        document.getElementById("tableBody").innerHTML = `<tr><td colspan="6"><div class="empty-state">${err.message}</div></td></tr>`;
+      }
+    }
+
+    function renderStats(rows) {
+      const present = rows.filter(r => r.status === "present").length;
+      const halfDay = rows.filter(r => r.status === "half_day").length;
+      const leave = rows.filter(r => r.status === "leave").length;
+      const totalHours = rows.reduce((sum, r) => sum + (r.work_hours || 0), 0);
+      document.getElementById("statRow").innerHTML = `
+        <div class="stat-card"><div class="val">${present}</div><div class="lbl">Days Present</div></div>
+        <div class="stat-card"><div class="val">${halfDay}</div><div class="lbl">Half Days</div></div>
+        <div class="stat-card"><div class="val">${leave}</div><div class="lbl">On Leave</div></div>
+        <div class="stat-card"><div class="val">${totalHours.toFixed(1)}h</div><div class="lbl">Total Work Hours</div></div>
+      `;
+    }
+
+    function renderBody(rows, isAdminView) {
+      const body = document.getElementById("tableBody");
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">🗓️</div>No attendance records for this ${isAdminView ? 'day' : 'month'} yet.</div></td></tr>`;
+        return;
+      }
+      body.innerHTML = rows.map(r => `
+        <tr>
+          <td>${isAdminView ? r.employee_name : fmtDate(r.work_date)}</td>
+          <td>${fmtTime(r.check_in)}</td>
+          <td>${fmtTime(r.check_out)}</td>
+          <td><span class="badge ${r.status}">${r.status.replace('_', ' ')}</span></td>
+          <td>${r.work_hours}h</td>
+          <td>${r.extra_hours}h</td>
+        </tr>
+      `).join("");
+    }
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In · HRMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card">
+      <div class="brand-row">
+        <div class="brand-mark">HR</div>
+        <div>
+          <div class="brand-name">HRMS</div>
+          <div class="brand-tagline">Every workday, perfectly aligned.</div>
+        </div>
+      </div>
+
+      <h1 class="page-title">Sign in</h1>
+      <p class="subtitle">Use your login ID or email to continue.</p>
+
+      <div class="banner" id="banner"></div>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="login">Login ID or Email</label>
+          <input type="text" id="login" autocomplete="username" placeholder="OIJODO20260001 or you@company.com" required>
+          <div class="error-text" id="loginError">Please enter your login ID or email.</div>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="password-wrap">
+            <input type="password" id="password" autocomplete="current-password" placeholder="••••••••" required>
+            <button type="button" class="password-toggle" id="togglePw">show</button>
+          </div>
+          <div class="error-text" id="passwordError">Please enter your password.</div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Sign In</button>
+      </form>
+
+      <div class="form-footer">
+        Don't have an account? <button class="link-btn" onclick="window.location.href='signup.html'">Sign Up</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (Auth.getToken()) window.location.href = "dashboard.html";
+
+    const form = document.getElementById("loginForm");
+    const banner = document.getElementById("banner");
+    const submitBtn = document.getElementById("submitBtn");
+
+    document.getElementById("togglePw").addEventListener("click", (e) => {
+      const input = document.getElementById("password");
+      const isPw = input.type === "password";
+      input.type = isPw ? "text" : "password";
+      e.target.textContent = isPw ? "hide" : "show";
+    });
+
+    function validateField(inputId, errorId, isValid) {
+      const input = document.getElementById(inputId);
+      const error = document.getElementById(errorId);
+      input.classList.toggle("invalid", !isValid);
+      error.classList.toggle("show", !isValid);
+      return isValid;
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hideBanner(banner);
+
+      const login = document.getElementById("login").value.trim();
+      const password = document.getElementById("password").value;
+
+      const loginOk = validateField("login", "loginError", login.length > 0);
+      const pwOk = validateField("password", "passwordError", password.length > 0);
+      if (!loginOk || !pwOk) return;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Signing in…";
+      try {
+        const data = await api.post("/api/auth/login", { login, password });
+        Auth.setSession(data.access_token, {
+          role: data.role,
+          login_id: data.login_id,
+          full_name: data.full_name,
+          must_change_password: data.must_change_password,
+        });
+        window.location.href = data.must_change_password ? "change-password.html" : "dashboard.html";
+      } catch (err) {
+        showBanner(banner, err.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Sign In";
+      }
+    });
+  </script>
+</body>
+</html>

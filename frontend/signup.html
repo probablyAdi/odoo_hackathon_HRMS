@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Up · HRMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="centered-shell">
+    <div class="auth-card wide">
+      <div class="brand-row">
+        <div class="brand-mark">HR</div>
+        <div>
+          <div class="brand-name">HRMS</div>
+          <div class="brand-tagline">Every workday, perfectly aligned.</div>
+        </div>
+      </div>
+
+      <h1 class="page-title">Create your account</h1>
+      <p class="subtitle">Your login ID will be generated automatically once you sign up.</p>
+
+      <div class="banner" id="banner"></div>
+
+      <form id="signupForm" novalidate>
+        <div class="field-row">
+          <div class="field" style="flex: 2;">
+            <label for="companyName">Company Name</label>
+            <input type="text" id="companyName" placeholder="Acme Corporation" required>
+          </div>
+          <div class="field" style="flex: 1; min-width: 120px;">
+            <label for="companyLogo">Upload Logo</label>
+            <input type="file" id="companyLogo" accept="image/*" style="padding: 7px 10px;">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="firstName">First Name</label>
+            <input type="text" id="firstName" placeholder="John" required>
+          </div>
+          <div class="field">
+            <label for="lastName">Last Name</label>
+            <input type="text" id="lastName" placeholder="Doe" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="you@company.com" required>
+          <div class="error-text" id="emailError">Enter a valid email address.</div>
+        </div>
+
+        <div class="field">
+          <label for="phone">Phone (optional)</label>
+          <input type="tel" id="phone" placeholder="9876543210">
+        </div>
+
+        <div class="field">
+          <label for="role">Role</label>
+          <select id="role">
+            <option value="employee">Employee</option>
+            <option value="admin">Admin / HR Officer</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="password-wrap">
+              <input type="password" id="password" placeholder="At least 8 characters" required>
+              <button type="button" class="password-toggle" data-target="password">show</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="confirmPassword">Confirm Password</label>
+            <div class="password-wrap">
+              <input type="password" id="confirmPassword" placeholder="Repeat password" required>
+              <button type="button" class="password-toggle" data-target="confirmPassword">show</button>
+            </div>
+          </div>
+        </div>
+        <p class="helper-text" id="pwHelper">Must be 8+ characters, with at least one uppercase letter and one number.</p>
+        <div class="error-text" id="passwordError">Passwords must match and meet the strength rule above.</div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn" style="margin-top: 8px;">Sign Up</button>
+      </form>
+
+      <div class="form-footer">
+        Already have an account? <button class="link-btn" onclick="window.location.href='index.html'">Sign In</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (Auth.getToken()) window.location.href = "dashboard.html";
+
+    document.querySelectorAll(".password-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.dataset.target);
+        const isPw = input.type === "password";
+        input.type = isPw ? "text" : "password";
+        btn.textContent = isPw ? "hide" : "show";
+      });
+    });
+
+    const form = document.getElementById("signupForm");
+    const banner = document.getElementById("banner");
+    const submitBtn = document.getElementById("submitBtn");
+
+    function isStrongPassword(pw) {
+      return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw);
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hideBanner(banner);
+
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const confirmPassword = document.getElementById("confirmPassword").value;
+
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      document.getElementById("email").classList.toggle("invalid", !emailOk);
+      document.getElementById("emailError").classList.toggle("show", !emailOk);
+
+      const pwOk = isStrongPassword(password) && password === confirmPassword;
+      document.getElementById("password").classList.toggle("invalid", !pwOk);
+      document.getElementById("confirmPassword").classList.toggle("invalid", !pwOk);
+      document.getElementById("passwordError").classList.toggle("show", !pwOk);
+
+      if (!emailOk || !pwOk) return;
+
+      const payload = {
+        company_name: document.getElementById("companyName").value.trim(),
+        first_name: document.getElementById("firstName").value.trim(),
+        last_name: document.getElementById("lastName").value.trim(),
+        email,
+        phone: document.getElementById("phone").value.trim() || null,
+        role: document.getElementById("role").value,
+        password,
+        confirm_password: confirmPassword,
+      };
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Creating account…";
+      try {
+        const data = await api.post("/api/auth/signup", payload);
+        Auth.setSession(data.access_token, {
+          role: data.role,
+          login_id: data.login_id,
+          full_name: data.full_name,
+          must_change_password: data.must_change_password,
+        });
+        toast(`Account created! Your login ID is ${data.login_id}`, "success");
+        setTimeout(() => window.location.href = "dashboard.html", 1200);
+      } catch (err) {
+        showBanner(banner, err.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Sign Up";
+      }
+    });
+  </script>
+</body>
+</html>

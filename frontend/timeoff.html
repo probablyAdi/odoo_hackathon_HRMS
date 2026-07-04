@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Off · HRMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="topbar-mount"></div>
+
+  <div class="page-wrap">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Time Off</h1>
+        <p class="subtitle mt-0" id="pageSubtitle">Loading…</p>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <select id="statusFilter" style="display:none; width:auto;">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button class="btn btn-primary btn-sm" id="newLeaveBtn" style="display:none;">+ New</button>
+      </div>
+    </div>
+
+    <div class="leave-balance-row" id="balanceRow"></div>
+
+    <div class="panel" id="calendarPanel" style="margin-bottom: 20px; display: none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <h3 style="margin:0; font-size:15px; font-weight:650;" id="calMonthLabel"></h3>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-icon" id="calPrev">◀</button>
+          <button class="btn-icon" id="calNext">▶</button>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:2px; text-align:center;">
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Mon</div>
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Tue</div>
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Wed</div>
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Thu</div>
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Fri</div>
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Sat</div>
+        <div style="font-size:11px; font-weight:600; color:var(--text-faint); padding:6px;">Sun</div>
+      </div>
+      <div id="calGrid" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:2px; text-align:center;"></div>
+    </div>
+
+    <div class="panel">
+      <table class="data-table">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6"><div class="skeleton" style="height:40px;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Apply for leave modal -->
+  <div class="modal-overlay" id="applyModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Time Off Type Request</h3>
+        <button class="modal-close" id="closeApplyModal">✕</button>
+      </div>
+      <div class="banner" id="applyBanner"></div>
+      <form id="applyForm">
+        <div class="field">
+          <label>Employee</label>
+          <input type="text" id="modalEmpName" disabled style="opacity:0.6;">
+        </div>
+        <div class="field">
+          <label>Time Off Type</label>
+          <select id="leaveType" required>
+            <option value="paid">Paid Time Off</option>
+            <option value="sick">Sick Leave</option>
+            <option value="unpaid">Unpaid Leave</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Start Date</label><input type="date" id="startDate" required onchange="calcAllocation()"></div>
+          <div class="field"><label>End Date</label><input type="date" id="endDate" required onchange="calcAllocation()"></div>
+        </div>
+        <div class="field">
+          <label>Allocation</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="text" id="allocationDisplay" value="0.00" disabled style="max-width:80px; text-align:center; font-weight:700; opacity:0.7;">
+            <span style="font-size:13px; color:var(--text-dim);">Days</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Remarks</label>
+          <textarea id="remarks" rows="2" maxlength="300" placeholder="Optional note for your manager"></textarea>
+        </div>
+        <div class="field">
+          <label>Attachment (for sick leave certificate)</label>
+          <input type="file" id="attachmentFile" accept=".pdf,image/*">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:8px;">
+          <button type="submit" class="btn btn-primary" id="applySubmit" style="flex:1;">Submit</button>
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('applyModal').classList.remove('show')" style="flex:1;">Discard</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Reject reason modal -->
+  <div class="modal-overlay" id="rejectModal">
+    <div class="modal-box">
+      <div class="modal-head"><h3>Reject Request</h3><button class="modal-close" id="closeRejectModal">✕</button></div>
+      <div class="field"><label>Reason (optional, shown to employee)</label><textarea id="rejectComment" rows="3" maxlength="300"></textarea></div>
+      <button class="btn btn-danger" id="confirmRejectBtn" style="width:100%;">Confirm Rejection</button>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script>
+    const session = renderShell("timeoff");
+    const isAdmin = session.role === "admin";
+    let pendingRejectId = null;
+
+    document.getElementById("pageSubtitle").textContent = isAdmin
+      ? "Review and decide on every employee's time-off requests."
+      : "Apply for leave and track your requests.";
+
+    if (!isAdmin) document.getElementById("newLeaveBtn").style.display = "inline-flex";
+    if (isAdmin) document.getElementById("statusFilter").style.display = "inline-block";
+
+    const balanceLabels = { paid: "Paid Time Off", sick: "Sick Leave", unpaid: "Unpaid Leave" };
+
+    async function loadBalances() {
+      if (isAdmin) { document.getElementById("balanceRow").innerHTML = ""; return; }
+      try {
+        const balances = await api.get("/api/timeoff/balances");
+        document.getElementById("balanceRow").innerHTML = balances.map(b => `
+          <div class="balance-chip">
+            <div class="num">${b.available_days}</div>
+            <div class="lbl">${balanceLabels[b.leave_type] || b.leave_type} available</div>
+          </div>
+        `).join("");
+      } catch (err) { /* non-critical */ }
+    }
+
+    async function loadRequests() {
+      const head = document.getElementById("tableHead");
+      const body = document.getElementById("tableBody");
+      head.innerHTML = isAdmin
+        ? `<tr><th>Employee</th><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Remarks</th><th>Status</th><th></th></tr>`
+        : `<tr><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Remarks</th><th>Status</th></tr>`;
+
+      try {
+        const statusFilter = isAdmin ? document.getElementById("statusFilter").value : "";
+        const rows = isAdmin
+          ? await api.get(`/api/timeoff/all${statusFilter ? "?status_filter=" + statusFilter : ""}`)
+          : await api.get("/api/timeoff/me");
+
+        if (!rows.length) {
+          body.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">🏖️</div>No time-off requests yet.</div></td></tr>`;
+          return;
+        }
+
+        body.innerHTML = rows.map(r => `
+          <tr>
+            ${isAdmin ? `<td>${r.employee_name}</td>` : ""}
+            <td>${balanceLabels[r.leave_type] || r.leave_type}</td>
+            <td>${fmtDate(r.start_date)}</td>
+            <td>${fmtDate(r.end_date)}</td>
+            <td>${r.days_count}</td>
+            <td>${r.remarks || '<span class="text-muted">—</span>'}</td>
+            <td><span class="badge ${r.status}">${r.status}</span></td>
+            ${isAdmin ? `<td>${r.status === "pending" ? `
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-success btn-sm" onclick="approveRequest(${r.id})">Approve</button>
+                <button class="btn btn-danger btn-sm" onclick="openReject(${r.id})">Reject</button>
+              </div>` : (r.admin_comment ? `<span class="text-muted" style="font-size:12px;">${r.admin_comment}</span>` : "")}</td>` : ""}
+          </tr>
+        `).join("");
+      } catch (err) {
+        body.innerHTML = `<tr><td colspan="8"><div class="empty-state">${err.message}</div></td></tr>`;
+      }
+    }
+
+    document.getElementById("statusFilter")?.addEventListener("change", loadRequests);
+
+    async function approveRequest(id) {
+      try {
+        await api.post(`/api/timeoff/${id}/decide`, { decision: "approved" });
+        toast("Request approved.", "success");
+        loadRequests();
+      } catch (err) { toast(err.message, "error"); }
+    }
+
+    function openReject(id) {
+      pendingRejectId = id;
+      document.getElementById("rejectComment").value = "";
+      document.getElementById("rejectModal").classList.add("show");
+    }
+    document.getElementById("closeRejectModal").addEventListener("click", () => document.getElementById("rejectModal").classList.remove("show"));
+    document.getElementById("confirmRejectBtn").addEventListener("click", async () => {
+      try {
+        await api.post(`/api/timeoff/${pendingRejectId}/decide`, {
+          decision: "rejected",
+          admin_comment: document.getElementById("rejectComment").value.trim() || null,
+        });
+        document.getElementById("rejectModal").classList.remove("show");
+        toast("Request rejected.", "success");
+        loadRequests();
+      } catch (err) { toast(err.message, "error"); }
+    });
+
+    // ---------------------------------------------------- apply modal
+    const applyModal = document.getElementById("applyModal");
+    document.getElementById("closeApplyModal").addEventListener("click", () => applyModal.classList.remove("show"));
+
+    document.getElementById("applyForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const banner = document.getElementById("applyBanner");
+      hideBanner(banner);
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+
+      if (!start || !end) { showBanner(banner, "Please choose both a start and end date.", "error"); return; }
+      if (end < start) { showBanner(banner, "End date cannot be before the start date.", "error"); return; }
+
+      const submitBtn = document.getElementById("applySubmit");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting…";
+      try {
+        const fileInput = document.getElementById("attachmentFile");
+        const attachment_url = fileInput.files.length > 0 ? `uploads/leaves/${fileInput.files[0].name}` : null;
+        await api.post("/api/timeoff/apply", {
+          leave_type: document.getElementById("leaveType").value,
+          start_date: start,
+          end_date: end,
+          remarks: document.getElementById("remarks").value.trim() || null,
+          attachment_url: attachment_url,
+        });
+        applyModal.classList.remove("show");
+        toast("Time-off request submitted.", "success");
+        loadRequests();
+        loadBalances();
+        renderCalendar();
+      } catch (err) {
+        showBanner(banner, err.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit";
+      }
+    });
+
+    // ---------------------------------------------------- allocation calculator
+    function calcAllocation() {
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      if (start && end) {
+        const diff = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24) + 1;
+        document.getElementById("allocationDisplay").value = diff > 0 ? diff.toFixed(2) : "0.00";
+      } else {
+        document.getElementById("allocationDisplay").value = "0.00";
+      }
+    }
+
+    // ---------------------------------------------------- calendar
+    let calYear, calMonth, approvedLeaves = [];
+
+    function initCalendar() {
+      if (isAdmin) return;
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth();
+      document.getElementById("calendarPanel").style.display = "block";
+      document.getElementById("calPrev").addEventListener("click", () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); });
+      document.getElementById("calNext").addEventListener("click", () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); });
+      renderCalendar();
+    }
+
+    async function renderCalendar() {
+      const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      document.getElementById("calMonthLabel").textContent = `${monthNames[calMonth]} ${calYear}`;
+
+      // Fetch approved leaves to highlight on the calendar
+      try {
+        const rows = await api.get("/api/timeoff/me");
+        approvedLeaves = rows.filter(r => r.status === "approved");
+      } catch { approvedLeaves = []; }
+
+      const grid = document.getElementById("calGrid");
+      const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const offset = firstDay === 0 ? 6 : firstDay - 1; // shift so Mon=0
+
+      let html = "";
+      for (let i = 0; i < offset; i++) {
+        html += `<div style="padding:8px; font-size:13px;"></div>`;
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        const isLeave = approvedLeaves.some(l => dateStr >= l.start_date && dateStr <= l.end_date);
+        const isToday = dateStr === new Date().toISOString().slice(0, 10);
+        let style = "padding:8px; font-size:13px; border-radius:6px;";
+        if (isLeave) style += "background: var(--red-soft); color: var(--red); font-weight:600;";
+        else if (isToday) style += "background: var(--accent-soft); color: #c4b5fd; font-weight:700;";
+        html += `<div style="${style}">${d}</div>`;
+      }
+      grid.innerHTML = html;
+    }
+
+    // ---------------------------------------------------- modal pre-fill
+    document.getElementById("newLeaveBtn")?.addEventListener("click", () => {
+      document.getElementById("applyForm").reset();
+      document.getElementById("modalEmpName").value = session.full_name;
+      document.getElementById("allocationDisplay").value = "0.00";
+      hideBanner(document.getElementById("applyBanner"));
+      applyModal.classList.add("show");
+    });
+
+    loadBalances();
+    loadRequests();
+    initCalendar();
+  </script>
+</body>
+</html>

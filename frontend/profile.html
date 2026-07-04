@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile · HRMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="topbar-mount"></div>
+
+  <div class="page-wrap" style="max-width: 900px;">
+    <div class="panel" id="headerPanel">
+      <div class="skeleton" style="height:80px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs" id="tabBar"></div>
+      <div id="tabContent"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script>
+    const session = renderShell("dashboard");
+    const params = new URLSearchParams(window.location.search);
+    const viewingId = params.get("id");
+
+    let profile = null;
+    let isSelf = false;
+    let isAdmin = session.role === "admin";
+    let canEditJobFields = false; // admin editing someone else
+    let canEditPersonalFields = false; // self editing own limited fields
+
+    async function loadProfile() {
+      try {
+        profile = viewingId ? await api.get(`/api/employees/${viewingId}`) : await api.get("/api/employees/me");
+        isSelf = profile.login_id === session.login_id;
+        canEditJobFields = isAdmin && !isSelf;
+        canEditPersonalFields = isSelf;
+        renderHeader();
+        renderTabs();
+      } catch (err) {
+        document.getElementById("headerPanel").innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>${err.message}</div>`;
+      }
+    }
+
+    function renderHeader() {
+      document.getElementById("headerPanel").innerHTML = `
+        <div style="display:flex; align-items:center; gap:18px;">
+          <div class="emp-avatar" style="width:64px; height:64px; font-size:20px;">${initials(profile.first_name + " " + profile.last_name)}</div>
+          <div style="flex:1;">
+            <div style="font-size:18px; font-weight:650;">${profile.first_name} ${profile.last_name}</div>
+            <div class="text-muted" style="font-size:13px; margin-top:2px;">${profile.job_position || "No job title set"} · ${profile.department || "—"}</div>
+            <div class="text-muted" style="font-size:12px; margin-top:4px; font-family: var(--font-mono);">${profile.login_id} · ${profile.email}</div>
+          </div>
+          ${!isSelf && !isAdmin ? '<span class="badge" style="background:var(--surface-2); color:var(--text-faint);">View only</span>' : ''}
+        </div>
+      `;
+    }
+
+    function renderTabs() {
+      const tabs = [
+        { key: "resume", label: "Resume" },
+        { key: "private", label: "Private Info" },
+      ];
+      if (isAdmin || isSelf) {
+        tabs.push({ key: "salary", label: "Salary Info" });
+      }
+      if (isSelf) {
+        tabs.push({ key: "security", label: "Security" });
+      }
+
+      document.getElementById("tabBar").innerHTML = tabs.map((t, i) => `
+        <button class="tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>
+      `).join("");
+
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          renderTabContent(btn.dataset.tab);
+        });
+      });
+
+      renderTabContent("resume");
+    }
+
+    function field(label, value, editable, key, type = "text") {
+      if (!editable) {
+        return `<div class="field"><label>${label}</label><div style="padding:9px 0; font-size:14px;">${value || '<span class="text-muted">—</span>'}</div></div>`;
+      }
+      return `<div class="field"><label>${label}</label><input type="${type}" data-field="${key}" value="${value || ''}"></div>`;
+    }
+
+    function renderTabContent(tab) {
+      const container = document.getElementById("tabContent");
+      const canEditThisTab = tab === "salary" ? isAdmin && !isSelf : (canEditJobFields || canEditPersonalFields);
+
+      if (tab === "resume") {
+        container.innerHTML = `
+          <div class="grid-2">
+            <div class="field"><label>About</label><textarea rows="3" data-field="about" ${canEditPersonalFields || canEditJobFields ? '' : 'disabled'}>${profile.about || ''}</textarea></div>
+            <div class="field"><label>What I love about my job</label><textarea rows="3" data-field="what_i_love" ${canEditPersonalFields || canEditJobFields ? '' : 'disabled'}>${profile.what_i_love || ''}</textarea></div>
+          </div>
+          <div class="field"><label>Interests &amp; hobbies</label><textarea rows="2" data-field="hobbies" ${canEditPersonalFields || canEditJobFields ? '' : 'disabled'}>${profile.hobbies || ''}</textarea></div>
+          <div class="grid-2" style="margin-top: 10px;">
+            <div>
+              <label style="font-size:12.5px; font-weight:600; color:var(--text-dim);">Skills</label>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin:8px 0;" id="skillsList">
+                ${profile.skills.map(s => `<span class="badge" style="background:var(--surface-2); color:var(--text-dim);">${s}</span>`).join("") || '<span class="text-muted" style="font-size:13px;">No skills added yet.</span>'}
+              </div>
+              ${isSelf ? '<button class="btn btn-ghost btn-sm" id="addSkillBtn">+ Add Skill</button>' : ''}
+            </div>
+            <div>
+              <label style="font-size:12.5px; font-weight:600; color:var(--text-dim);">Certifications</label>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin:8px 0;" id="certsList">
+                ${profile.certifications.map(c => `<span class="badge" style="background:var(--surface-2); color:var(--text-dim);">${c}</span>`).join("") || '<span class="text-muted" style="font-size:13px;">No certifications added yet.</span>'}
+              </div>
+              ${isSelf ? '<button class="btn btn-ghost btn-sm" id="addCertBtn">+ Add Certification</button>' : ''}
+            </div>
+          </div>
+          ${(canEditPersonalFields || canEditJobFields) ? saveBar("resume") : ""}
+        `;
+        document.getElementById("addSkillBtn")?.addEventListener("click", async () => {
+          const name = prompt("Skill name:");
+          if (!name) return;
+          try { profile.skills = await api.post(`/api/employees/me/skills?name=${encodeURIComponent(name)}`); renderTabContent("resume"); }
+          catch (err) { toast(err.message, "error"); }
+        });
+        document.getElementById("addCertBtn")?.addEventListener("click", async () => {
+          const name = prompt("Certification name:");
+          if (!name) return;
+          try { profile.certifications = await api.post(`/api/employees/me/certifications?name=${encodeURIComponent(name)}`); renderTabContent("resume"); }
+          catch (err) { toast(err.message, "error"); }
+        });
+        wireSaveBar("resume", ["about", "what_i_love", "hobbies"]);
+      }
+
+      if (tab === "private") {
+        const jobEditable = canEditJobFields;
+        const personalEditable = canEditPersonalFields || canEditJobFields;
+        container.innerHTML = `
+          <div class="grid-2">
+            ${field("Job Position", profile.job_position, jobEditable, "job_position")}
+            ${field("Department", profile.department, jobEditable, "department")}
+            ${field("Location", profile.location, jobEditable, "location")}
+            <div class="field"><label>Manager</label><div style="padding:9px 0; font-size:14px;">${profile.manager_name || '<span class="text-muted">—</span>'}</div></div>
+            ${field("Date of Birth", profile.date_of_birth, personalEditable, "date_of_birth", "date")}
+            ${field("Residing Address", profile.residing_address, personalEditable, "residing_address")}
+            ${field("Nationality", profile.nationality, personalEditable, "nationality")}
+            ${field("Personal Email", profile.personal_email, personalEditable, "personal_email", "email")}
+            ${field("Gender", profile.gender, personalEditable, "gender")}
+            ${field("Marital Status", profile.marital_status, personalEditable, "marital_status")}
+            ${field("Bank Name", profile.bank_name, personalEditable, "bank_name")}
+            ${field("Account Number", profile.account_number, personalEditable, "account_number")}
+            ${field("IFSC Code", profile.ifsc_code, personalEditable, "ifsc_code")}
+            ${field("PAN No.", profile.pan_no, personalEditable, "pan_no")}
+            ${field("UAN No.", profile.uan_no, personalEditable, "uan_no")}
+          </div>
+          ${(jobEditable || personalEditable) ? saveBar("private") : ""}
+        `;
+        wireSaveBar("private", ["job_position", "department", "location", "date_of_birth",
+          "residing_address", "nationality", "personal_email", "gender", "marital_status",
+          "bank_name", "account_number", "ifsc_code", "pan_no", "uan_no"]);
+      }
+
+      if (tab === "salary") {
+        renderSalaryTab(container);
+      }
+
+      if (tab === "security") {
+        container.innerHTML = `
+          <div class="grid-2">
+            <div class="field"><label>Current Password</label><input type="password" id="secOld"></div>
+            <div class="field"><label>New Password</label><input type="password" id="secNew"></div>
+          </div>
+          <p class="helper-text">Must be 8+ characters with an uppercase letter and a number.</p>
+          <button class="btn btn-primary btn-sm" id="secSave">Update Password</button>
+        `;
+        document.getElementById("secSave").addEventListener("click", async () => {
+          const old_password = document.getElementById("secOld").value;
+          const new_password = document.getElementById("secNew").value;
+          try {
+            await api.post("/api/auth/change-password", { old_password, new_password });
+            toast("Password updated.", "success");
+            document.getElementById("secOld").value = ""; document.getElementById("secNew").value = "";
+          } catch (err) { toast(err.message, "error"); }
+        });
+      }
+    }
+
+    function saveBar(tab) {
+      return `<div style="margin-top:16px; display:flex; justify-content:flex-end;"><button class="btn btn-primary btn-sm" id="saveBtn-${tab}">Save Changes</button></div>`;
+    }
+
+    function wireSaveBar(tab, fields) {
+      const btn = document.getElementById(`saveBtn-${tab}`);
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        const payload = {};
+        fields.forEach(f => {
+          const el = document.querySelector(`[data-field="${f}"]`);
+          if (el) payload[f] = el.value || null;
+        });
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+        try {
+          const endpoint = isSelf ? "/api/employees/me" : `/api/employees/${profile.id}`;
+          profile = await api.put(endpoint, payload);
+          toast("Saved.", "success");
+          renderHeader();
+        } catch (err) {
+          toast(err.message, "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Save Changes";
+        }
+      });
+    }
+
+    // ---------------------------------------------------- salary tab
+    async function renderSalaryTab(container) {
+      container.innerHTML = `<div class="skeleton" style="height:160px;"></div>`;
+      try {
+        const endpoint = isSelf ? "/api/payroll/me" : `/api/payroll/${profile.id}`;
+        const payroll = await api.get(endpoint);
+        const editable = isAdmin && !isSelf;
+
+        // pull the underlying % fields back out of the computed response so
+        // admins can tweak them (fall back to sane defaults if not present)
+        const pct = {
+          basic_pct: payroll.basic_pct ?? 50.00,
+          hra_pct_of_basic: payroll.hra_pct_of_basic ?? 50.00,
+          standard_allowance_pct: payroll.standard_allowance_pct ?? 16.67,
+          performance_bonus_pct: payroll.performance_bonus_pct ?? 8.33,
+          lta_pct: payroll.lta_pct ?? 8.33,
+          pf_employee_pct: payroll.pf_employee_pct ?? 12.00,
+          pf_employer_pct: payroll.pf_employer_pct ?? 12.00,
+          professional_tax: payroll.professional_tax ?? 200.00,
+        };
+
+        function pctInput(id, label, value) {
+          return editable
+            ? `<div class="field"><label>${label}</label><input type="number" step="0.01" id="${id}" value="${value}"></div>`
+            : "";
+        }
+
+        container.innerHTML = `
+          <div class="grid-2" style="margin-bottom:18px;">
+            <div class="field"><label>Monthly Wage</label>
+              <input type="number" id="payWage" value="${payroll.monthly_wage}" ${editable ? '' : 'disabled'}>
+            </div>
+            <div class="field"><label>Yearly Wage</label>
+              <div style="padding:9px 0; font-size:14px;">${fmtCurrency(payroll.yearly_wage)}</div>
+            </div>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Component</th><th>Amount / month</th><th>% of wage</th></tr></thead>
+            <tbody>
+              ${payroll.components.map(c => `
+                <tr><td>${c.name}<div class="text-muted" style="font-size:11.5px; margin-top:2px;">${c.description}</div></td>
+                    <td>${fmtCurrency(c.amount)}</td><td>${c.percent_of_wage}%</td></tr>
+              `).join("")}
+            </tbody>
+          </table>
+          ${editable ? `
+          <p class="helper-text" style="margin-top:16px;">Adjust the % rules below. Fixed Allowance always absorbs whatever remains of the wage, so the total never exceeds 100%.</p>
+          <div class="grid-2">
+            ${pctInput("pctBasic", "Basic (% of wage)", pct.basic_pct)}
+            ${pctInput("pctHra", "HRA (% of Basic)", pct.hra_pct_of_basic)}
+            ${pctInput("pctStd", "Standard Allowance (% of wage)", pct.standard_allowance_pct)}
+            ${pctInput("pctBonus", "Performance Bonus (% of wage)", pct.performance_bonus_pct)}
+            ${pctInput("pctLta", "Leave Travel Allowance (% of wage)", pct.lta_pct)}
+            ${pctInput("pctPfEmp", "Employee PF (% of Basic)", pct.pf_employee_pct)}
+            ${pctInput("pctPfEr", "Employer PF (% of Basic)", pct.pf_employer_pct)}
+            ${pctInput("pctTax", "Professional Tax (flat / month)", pct.professional_tax)}
+          </div>` : ""}
+          <div class="grid-2" style="margin-top:18px;">
+            <div class="field"><label>Employee PF Contribution</label><div style="padding:9px 0;">${fmtCurrency(payroll.pf_employee)}</div></div>
+            <div class="field"><label>Employer PF Contribution</label><div style="padding:9px 0;">${fmtCurrency(payroll.pf_employer)}</div></div>
+            <div class="field"><label>Professional Tax</label><div style="padding:9px 0;">${fmtCurrency(payroll.professional_tax)}</div></div>
+            <div class="field"><label>Net Pay</label><div style="padding:9px 0; font-weight:650;">${fmtCurrency(payroll.net_pay)}</div></div>
+          </div>
+          ${editable ? `<div style="margin-top:16px; display:flex; justify-content:flex-end;"><button class="btn btn-primary btn-sm" id="saveSalaryBtn">Recalculate &amp; Save</button></div>` : ""}
+        `;
+
+        document.getElementById("saveSalaryBtn")?.addEventListener("click", async () => {
+          const wage = parseFloat(document.getElementById("payWage").value);
+          if (isNaN(wage) || wage < 0) { toast("Enter a valid monthly wage.", "error"); return; }
+          const val = (id) => parseFloat(document.getElementById(id).value);
+          try {
+            await api.put(`/api/payroll/${profile.id}`, {
+              monthly_wage: wage,
+              working_days_per_week: payroll.working_days_per_week,
+              break_time_hours: payroll.break_time_hours,
+              basic_pct: val("pctBasic"), hra_pct_of_basic: val("pctHra"),
+              standard_allowance_pct: val("pctStd"), performance_bonus_pct: val("pctBonus"), lta_pct: val("pctLta"),
+              pf_employee_pct: val("pctPfEmp"), pf_employer_pct: val("pctPfEr"), professional_tax: val("pctTax"),
+            });
+            toast("Salary updated.", "success");
+            renderSalaryTab(container);
+          } catch (err) { toast(err.message, "error"); }
+        });
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>${err.message}</div>`;
+      }
+    }
+
+    loadProfile();
+  </script>
+</body>
+</html>

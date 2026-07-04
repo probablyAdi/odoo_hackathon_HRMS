@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employees · HRMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="topbar-mount"></div>
+
+  <div class="page-wrap">
+    <div class="checkinout-card" id="checkInOutCard">
+      <div>
+        <div style="font-weight:650; font-size:15px;" id="ciGreeting">Welcome back!</div>
+        <div class="text-muted" style="font-size:12.5px; margin-top:2px;" id="ciStatus">Loading today's status…</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-primary btn-sm" id="checkInBtn" style="display:none;">Check In →</button>
+        <button class="btn btn-ghost btn-sm" id="checkOutBtn" style="display:none;">Check Out →</button>
+      </div>
+    </div>
+
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Employees</h1>
+        <p class="subtitle mt-0">Click a card to view an employee's profile.</p>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input type="text" class="topbar-search" id="searchInput" placeholder="Search employees…">
+        <button class="btn btn-primary btn-sm" id="newEmployeeBtn" style="display:none; white-space:nowrap;">+ New</button>
+      </div>
+    </div>
+
+    <div class="emp-grid" id="empGrid">
+      <div class="skeleton" style="height:140px;"></div>
+      <div class="skeleton" style="height:140px;"></div>
+      <div class="skeleton" style="height:140px;"></div>
+      <div class="skeleton" style="height:140px;"></div>
+    </div>
+  </div>
+
+  <!-- Admin: create employee modal -->
+  <div class="modal-overlay" id="newEmpModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Add Employee</h3>
+        <button class="modal-close" id="closeNewEmpModal">✕</button>
+      </div>
+      <div class="banner" id="newEmpBanner"></div>
+      <form id="newEmpForm">
+        <div class="field-row">
+          <div class="field"><label>First Name</label><input type="text" id="neFirst" required></div>
+          <div class="field"><label>Last Name</label><input type="text" id="neLast" required></div>
+        </div>
+        <div class="field"><label>Email</label><input type="email" id="neEmail" required></div>
+        <div class="field"><label>Phone</label><input type="tel" id="nePhone"></div>
+        <div class="field">
+          <label>Role</label>
+          <select id="neRole"><option value="employee">Employee</option><option value="admin">Admin / HR Officer</option></select>
+        </div>
+        <p class="helper-text">A login ID and temporary password will be generated automatically. The employee changes it on first login.</p>
+        <button type="submit" class="btn btn-primary" id="neSubmit">Create Employee</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Result modal showing generated credentials -->
+  <div class="modal-overlay" id="credsModal">
+    <div class="modal-box">
+      <div class="modal-head"><h3>Employee Created</h3><button class="modal-close" id="closeCredsModal">✕</button></div>
+      <p class="subtitle mt-0">Share these credentials securely. The employee must change the password on first login.</p>
+      <div class="panel" style="background: var(--surface-2);">
+        <div style="font-family: var(--font-mono); font-size: 14px; line-height: 2;">
+          <div>Login ID: <strong id="credsLoginId"></strong></div>
+          <div>Temp Password: <strong id="credsPassword"></strong></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="closeCredsBtn" style="margin-top:16px;">Done</button>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script>
+    const session = renderShell("dashboard");
+    document.getElementById("ciGreeting").textContent = `Welcome back, ${session.full_name.split(" ")[0]}!`;
+
+    if (session.role === "admin") {
+      document.getElementById("newEmployeeBtn").style.display = "inline-flex";
+      document.getElementById("checkInOutCard").querySelector("#ciStatus").textContent = "You can check in/out just like any employee.";
+    }
+
+    let allEmployees = [];
+
+    async function loadEmployees(search = "") {
+      const grid = document.getElementById("empGrid");
+      try {
+        const data = await api.get(`/api/employees?search=${encodeURIComponent(search)}`);
+        allEmployees = data;
+        renderGrid(data);
+      } catch (err) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="icon">⚠️</div>${err.message}</div>`;
+      }
+    }
+
+    function statusIcon(status) {
+      if (status === "present") return '<span class="emp-status-icon" title="Present">🟢</span>';
+      if (status === "leave") return '<span class="emp-status-icon" title="On leave">✈️</span>';
+      return '<span class="emp-status-icon" title="Absent">🟡</span>';
+    }
+
+    function renderGrid(data) {
+      const grid = document.getElementById("empGrid");
+      if (!data.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="icon">🔍</div>No employees match your search.</div>`;
+        return;
+      }
+      grid.innerHTML = data.map(emp => `
+        <div class="emp-card" onclick="window.location.href='profile.html?id=${emp.id}'">
+          ${statusIcon(emp.attendance_status_today)}
+          <div class="emp-avatar">${initials(emp.full_name)}</div>
+          <div class="emp-name">${emp.full_name}</div>
+          <div class="emp-role">${emp.job_position || "—"}</div>
+        </div>
+      `).join("");
+    }
+
+    let searchTimer;
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadEmployees(e.target.value), 250);
+    });
+
+    loadEmployees();
+
+    // ---------------------------------------------------- check-in/out
+    async function refreshCheckInOut() {
+      try {
+        const rows = await api.get("/api/attendance/me");
+        const today = new Date().toISOString().slice(0, 10);
+        const row = rows.find(r => r.work_date === today);
+        const statusEl = document.getElementById("ciStatus");
+        const inBtn = document.getElementById("checkInBtn");
+        const outBtn = document.getElementById("checkOutBtn");
+
+        if (!row || !row.check_in) {
+          statusEl.textContent = "You haven't checked in today.";
+          inBtn.style.display = "inline-flex"; outBtn.style.display = "none";
+        } else if (row.check_in && !row.check_out) {
+          statusEl.textContent = `Checked in at ${fmtTime(row.check_in)}.`;
+          inBtn.style.display = "none"; outBtn.style.display = "inline-flex";
+        } else {
+          statusEl.textContent = `Done for today — worked ${row.work_hours}h (in ${fmtTime(row.check_in)}, out ${fmtTime(row.check_out)}).`;
+          inBtn.style.display = "none"; outBtn.style.display = "none";
+        }
+      } catch { /* ignore, non-critical */ }
+    }
+    refreshCheckInOut();
+
+    document.getElementById("checkInBtn").addEventListener("click", async () => {
+      try { await api.post("/api/attendance/check-in"); toast("Checked in!", "success"); refreshCheckInOut(); refreshStatusDot(); }
+      catch (err) { toast(err.message, "error"); }
+    });
+    document.getElementById("checkOutBtn").addEventListener("click", async () => {
+      try { await api.post("/api/attendance/check-out"); toast("Checked out!", "success"); refreshCheckInOut(); refreshStatusDot(); loadEmployees(); }
+      catch (err) { toast(err.message, "error"); }
+    });
+
+    // ---------------------------------------------------- admin: add employee
+    const newEmpModal = document.getElementById("newEmpModal");
+    document.getElementById("newEmployeeBtn")?.addEventListener("click", () => newEmpModal.classList.add("show"));
+    document.getElementById("closeNewEmpModal").addEventListener("click", () => newEmpModal.classList.remove("show"));
+
+    document.getElementById("newEmpForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const banner = document.getElementById("newEmpBanner");
+      hideBanner(banner);
+      const submitBtn = document.getElementById("neSubmit");
+      submitBtn.disabled = true;
+      try {
+        const data = await api.post("/api/employees", {
+          first_name: document.getElementById("neFirst").value.trim(),
+          last_name: document.getElementById("neLast").value.trim(),
+          email: document.getElementById("neEmail").value.trim(),
+          phone: document.getElementById("nePhone").value.trim() || null,
+          role: document.getElementById("neRole").value,
+        });
+        newEmpModal.classList.remove("show");
+        document.getElementById("newEmpForm").reset();
+        document.getElementById("credsLoginId").textContent = data.login_id;
+        document.getElementById("credsPassword").textContent = data.temp_password;
+        document.getElementById("credsModal").classList.add("show");
+        loadEmployees();
+      } catch (err) {
+        showBanner(banner, err.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("closeCredsModal").addEventListener("click", () => document.getElementById("credsModal").classList.remove("show"));
+    document.getElementById("closeCredsBtn").addEventListener("click", () => document.getElementById("credsModal").classList.remove("show"));
+  </script>
+</body>
+</html>
