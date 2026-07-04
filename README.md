@@ -4,6 +4,8 @@
 > Dark-mode, Linear-inspired UI with real-time attendance, leave management, and payroll.
 
 ---
+## Demo Video
+https://drive.google.com/drive/folders/1CD_z692IAUDQId8HdU_2eZ2XTfpazTvV?dmr=1&ec=wgc-drive-%5Bmodule%5D-goto
 
 ## ✨ Features
 
