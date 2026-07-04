@@ -31,50 +31,6 @@
 
 ---
 
-## 📁 Project Structure
-
-```
-hrms/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app entry point
-│   │   ├── models.py            # SQLAlchemy ORM models
-│   │   ├── schemas.py           # Pydantic request/response schemas
-│   │   ├── database.py          # DB session management
-│   │   ├── security.py          # Password hashing (bcrypt)
-│   │   ├── deps.py              # Auth dependencies (JWT)
-│   │   ├── config.py            # Environment config
-│   │   ├── routers/
-│   │   │   ├── auth.py          # Login, Signup, Password change
-│   │   │   ├── employees.py     # CRUD, profile, skills, certs
-│   │   │   ├── attendance.py    # Check-in/out, admin logs
-│   │   │   ├── timeoff.py       # Leave apply, approve, reject
-│   │   │   └── payroll.py       # Salary structure & breakdown
-│   │   └── utils/
-│   │       ├── id_generator.py  # Login ID generator (ACM-JD-2026-001)
-│   │       └── salary_calc.py   # CTC → component calculator
-│   ├── schema.sql               # PostgreSQL DDL (tables, enums, indexes)
-│   ├── seed.py                  # Demo data seeder
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   ├── index.html               # Sign In page
-│   ├── signup.html              # Company registration
-│   ├── dashboard.html           # Employee grid + check-in
-│   ├── profile.html             # Multi-tab profile viewer
-│   ├── attendance.html          # Attendance log history
-│   ├── timeoff.html             # Leave balance, calendar, requests
-│   ├── change-password.html     # First-login password reset
-│   ├── css/style.css            # Full design system
-│   └── js/
-│       ├── api.js               # Fetch wrapper with JWT injection
-│       └── shell.js             # Shared nav, sidebar, toast system
-├── docs/
-│   └── ARCHITECTURE.md          # Technical architecture doc
-└── README.md
-```
-
----
 
 ## 🚀 Getting Started
 
@@ -163,33 +119,9 @@ This app supports **multiple companies** on a single database. Every API query f
 - Each signup creates a new company with its own data silo
 
 ---
-
-## 📄 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/auth/signup` | Register company + admin |
-| `POST` | `/api/auth/login` | JWT login |
-| `POST` | `/api/auth/change-password` | Update password |
-| `GET` | `/api/employees` | List company employees |
-| `GET` | `/api/employees/me` | My profile |
-| `POST` | `/api/employees` | Admin: onboard new employee |
-| `POST` | `/api/attendance/checkin` | Clock in |
-| `POST` | `/api/attendance/checkout` | Clock out |
-| `GET` | `/api/attendance/today` | Today's status |
-| `POST` | `/api/timeoff/apply` | Submit leave request |
-| `GET` | `/api/timeoff/balances` | My leave balances |
-| `POST` | `/api/timeoff/{id}/decide` | Admin: approve/reject |
-| `GET` | `/api/payroll/{id}` | Salary breakdown |
-
 ---
 
 ## 👥 Team
 
 Built during the **Odoo Hackathon** 🚀
 
----
-
-## 📝 License
-
-This project is for educational and hackathon purposes.
