@@ -58,14 +58,6 @@
           <input type="tel" id="phone" placeholder="9876543210">
         </div>
 
-        <div class="field">
-          <label for="role">Role</label>
-          <select id="role">
-            <option value="employee">Employee</option>
-            <option value="admin">Admin / HR Officer</option>
-          </select>
-        </div>
-
         <div class="field-row">
           <div class="field">
             <label for="password">Password</label>
@@ -144,7 +136,7 @@
         last_name: document.getElementById("lastName").value.trim(),
         email,
         phone: document.getElementById("phone").value.trim() || null,
-        role: document.getElementById("role").value,
+        role: "admin",
         password,
         confirm_password: confirmPassword,
       };
